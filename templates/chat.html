@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multilingual Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 200px;
+            background-color: #f4f4f4;
+            padding: 20px;
+            border-right: 1px solid #ddd;
+        }
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .message-form {
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            display: flex;
+        }
+        #message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+        .user-list {
+            margin-top: 20px;
+        }
+        .user-list h3 {
+            margin-top: 0;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            max-width: 70%;
+        }
+        .message.sent {
+            background-color: #e3f2fd;
+            margin-left: auto;
+        }
+        .message.received {
+            background-color: #f1f1f1;
+            margin-right: auto;
+        }
+        .username {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .room-info {
+            margin-bottom: 20px;
+        }
+        .system-message {
+            text-align: center;
+            color: #777;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Multilingual Chat</h2>
+        <div class="room-info">
+            <p><strong>Room:</strong> <span id="room-name">{{ room }}</span></p>
+            <p><strong>Username:</strong> <span id="username">{{ username }}</span></p>
+        </div>
+        <div class="user-list">
+            <h3>Users Online</h3>
+            <ul id="users"></ul>
+        </div>
+    </div>
+    <div class="main">
+        <div class="chat-container" id="chat-container"></div>
+        <form class="message-form" id="message-form">
+            <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off">
+            <button type="submit">Send</button>
+        </form>
+    </div>
+
+    <script>
+        // Get the current username and room from the page
+        const username = document.getElementById('username').textContent;
+        const roomName = document.getElementById('room-name').textContent;
+        
+        // Connect to Socket.IO
+        const socket = io();
+        const users = new Set();
+        
+        // Join the room
+        socket.emit('join_room', { room: roomName });
+        
+        // Handle user connected event
+        socket.on('user_connected', (data) => {
+            if (!users.has(data.username)) {
+                users.add(data.username);
+                updateUserList();
+                
+                if (data.username !== username) {
+                    addSystemMessage(`${data.username} has joined the chat`);
+                }
+            }
+        });
+        
+        // Handle user disconnected event
+        socket.on('user_disconnected', (data) => {
+            if (users.has(data.username)) {
+                users.delete(data.username);
+                updateUserList();
+                addSystemMessage(`${data.username} has left the chat`);
+            }
+        });
+        
+        // Handle receive message event
+        socket.on('receive_message', (data) => {
+            addMessage(data.username, data.message, data.username === username);
+        });
+        
+        // Submit message form
+        document.getElementById('message-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (message) {
+                socket.emit('send_message', { message: message });
+                messageInput.value = '';
+            }
+        });
+        
+        // Update the user list in the sidebar
+        function updateUserList() {
+            const userList = document.getElementById('users');
+            userList.innerHTML = '';
+            
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.textContent = user;
+                if (user === username) {
+                    li.textContent += ' (You)';
+                    li.style.fontWeight = 'bold';
+                }
+                userList.appendChild(li);
+            });
+        }
+        
+        // Add a message to the chat container
+        function addMessage(user, content, isSent) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isSent ? 'message sent' : 'message received';
+            
+            const usernameDiv = document.createElement('div');
+            usernameDiv.className = 'username';
+            usernameDiv.textContent = isSent ? 'You' : user;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = content;
+            
+            messageDiv.appendChild(usernameDiv);
+            messageDiv.appendChild(contentDiv);
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Add a system message to the chat
+        function addSystemMessage(content) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'system-message';
+            messageDiv.textContent = content;
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Add a welcome message
+        addSystemMessage(`Welcome to the chat room ${roomName}!`);
+    </script>
+</body>
+</html>
